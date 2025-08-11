@@ -1,5 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <netdb.h>     // for getaddrinfo, freeaddrinfo, struct addrinfo
+
 
 #ifndef DNS_RESOLVER_H
 #define DNS_RESOLVER_H
