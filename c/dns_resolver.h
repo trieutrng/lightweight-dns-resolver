@@ -1,11 +1,12 @@
+#ifndef DNS_RESOLVER_H
+#define DNS_RESOLVER_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <netdb.h>     // for getaddrinfo, freeaddrinfo, struct addrinfo
-
-
-#ifndef DNS_RESOLVER_H
-#define DNS_RESOLVER_H
+#include <netdb.h> 
+#include <sys/socket.h>
+#include<errno.h>
 
 #define A       0x01
 #define NS      0x02
@@ -26,6 +27,7 @@ struct Query {
 // Define methods
 int getquerytype(const char *type, struct Query *query); 
 int getqueryinfo(int argc, char *args[], struct Query *query);
+int buildDNSQuery(struct Query *query);
 // End define
 
 int getqueryinfo(int argc, char *args[], struct Query *query) {
