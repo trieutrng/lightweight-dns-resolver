@@ -15,12 +15,21 @@
 #define TXT     0x10
 #define AAAA    0x1C
 
+#define BUFFER 1024
+
 // Define structs
 struct Query {
     char dns_host[256];
     char dns_port[10];
     char domain[256];
     int type;
+};
+
+struct Answer {
+    char *name;
+    char *type;
+    int class;
+    int ttl;
 };
 // End define
 
@@ -75,9 +84,14 @@ int getquerytype(const char *type, struct Query *query) {
     } else if (strcasecmp("AAAA", type) == 0) {
         query->type = AAAA;
     } else {
+        printf("invalid query type: %s\n", type);
         return -1;
     }
     return 0;
+}
+
+void print_dns_name(struct Answer **answer) {
+
 }
 
 void printhelp() {
