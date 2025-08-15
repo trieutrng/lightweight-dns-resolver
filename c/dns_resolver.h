@@ -24,13 +24,6 @@ struct Query {
     char domain[256];
     int type;
 };
-
-struct Answer {
-    char *name;
-    char *type;
-    int class;
-    int ttl;
-};
 // End define
 
 // Define methods
@@ -90,10 +83,6 @@ int getquerytype(const char *type, struct Query *query) {
     return 0;
 }
 
-void print_dns_name(struct Answer **answer) {
-
-}
-
 void printhelp() {
     printf("usage: dns_resolver domain\n");
     printf("flags: \n");
@@ -101,6 +90,18 @@ void printhelp() {
     printf("\t -s: dns server\n");
     printf("\t -p: dns server port\n");
     printf("example: dns_resolver google.com -t aaaa -s 8.8.8.8 -p 53\n");
+}
+
+char* type_str(int type) {
+    switch (type) {
+        case A: return "A";
+        case NS: return "NS";
+        case CNAME: return "CNAME";
+        case MX: return "MX";
+        case TXT: return "TXT";
+        case AAAA: return "AAAA";
+        default: return "null";
+    }
 }
 
 #endif

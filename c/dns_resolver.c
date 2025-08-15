@@ -54,10 +54,12 @@ int open_udp_connection(char *host, char *port, struct addrinfo **addrinfo) {
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
+
     if (getaddrinfo(host, port, &hints, addrinfo) != 0) {
         printf("DNS host can't be resolved: %s", strerror(errno));
         exit(1);
     }
+
     int sockfd = socket((*addrinfo)->ai_family, (*addrinfo)->ai_socktype, (*addrinfo)->ai_protocol);
     if (sockfd < 0) {
         printf("Can't not open socket");
@@ -96,14 +98,47 @@ int queryUDP(char *host, char *port, char *packet, int packet_size, char *res_bu
     return read;
 }
 
-void print_name(const unsigned char *name) {
+unsigned char* extract_name(unsigned char *p_name, unsigned char **res) {
+    unsigned char name[BUFFER];
+    int size = *p_name++, i=0;
+    while (size) {
+        for (int j=0; j<size; j++) {
+            name[i++] = *(p_name++);
+        }
+        name[i] = '.';
+        size = *(p_name++);
+        if (size) {
+            i++;
+        }
+    }
+    name[i] = '\0'; // overwrite last '.'
+    
+    // allocate memory for result (+1 for '\0')
+    unsigned char *copy = malloc(i + 1);
+    memcpy(copy, name, i + 1);
+    *res = copy;
 
+    return p_name;
 }
 
-void resolve_dns_response(char *dns_res, int res_size, struct Answer *answer) {
-    const unsigned char *res = (const unsigned char *) dns_res;
+unsigned char* get_name(unsigned char *msg, unsigned char *p_name, unsigned char **res) {
+    if ((*p_name & 0xC0) == 0xC0) {
+        // pointer name
+        int offset = ((*p_name & 0x3F) << 8) + p_name[1];
+        printf("\tpointer: offset %d - ", offset);
+        extract_name(msg + offset, res);
+        return p_name + 2;
+    }
 
-    printf("parsing query ID: %0X %0X - recv: %d bytes\n", res[0], res[1], res_size);
+    return extract_name(p_name, res);
+}
+
+void resolve_dns_response(char *dns_res, int res_size) {
+    unsigned char *res = (unsigned char *) dns_res;
+
+    printf("recv: %d bytes\n", res_size);
+    printf("\n");
+    printf("ID: %0X %0X\n", res[0], res[1]);
 
     const int RQ = (res[2] >> 7) & 1;
     const int OPCODE = (res[2] >> 3) & 0x0F;
@@ -135,9 +170,77 @@ void resolve_dns_response(char *dns_res, int res_size, struct Answer *answer) {
     printf("NSCOUNT: %d\n", NSCOUNT);
     printf("ARCOUNT: %d\n", ARCOUNT);
 
+    unsigned char *p = res + 12;
+
     if (QDCOUNT) {
-        const unsigned char *name = res + 12;
-        print_name(name);
+        printf("\nQueries: \n");
+        unsigned char *p_quest = p;
+        for (int i=0; i<QDCOUNT; i++) {
+            unsigned char *name;
+            p_quest = get_name(res, p_quest, &name);
+            printf("\tname: %s\n", name);
+
+            printf("\ttype: %s\n", type_str((*p_quest << 8) + p_quest[1]));
+            p_quest += 2;
+
+            printf("\tclass: %d\n", (*p_quest << 8) + p_quest[1]);
+            p_quest += 2;
+        }
+        p = p_quest;
+    }
+
+    if (ANCOUNT || NSCOUNT) {
+        printf("\nAnswers: \n");
+        unsigned char *p_ans = p;
+        for (int i=0; i<ANCOUNT + NSCOUNT; i++) {
+            unsigned char *name;
+            p_ans = get_name(res, p_ans, &name);
+            printf("%s\n", name);
+
+            const unsigned int type = (*p_ans << 8) + p_ans[1];
+            printf("\ttype: %d - %s\n", type, type_str(type));
+            p_ans += 2;
+
+            const int class = (*p_ans << 8) + p_ans[1];
+            printf("\tclass: %d\n", class);
+            p_ans += 2;
+            
+            const unsigned int ttl = (*p_ans << 24) + (p_ans[1] << 16) + (p_ans[2] << 8) + p_ans[3];
+            printf("\tttl: %u\n", ttl);
+            p_ans += 4;
+
+            const int rdlen = (*p_ans << 8) + p_ans[1];
+            printf("\trdlen: %d\n", rdlen);
+            p_ans += 2;
+
+            if (rdlen == 4 && type == A) {
+                printf("\taddress: ");
+                printf("%d.%d.%d.%d\n", p_ans[0], p_ans[1], p_ans[2], p_ans[3]);
+
+            } else if (rdlen == 16 && type == AAAA) {
+                printf("\taddress: ");
+                int j;
+                for (j = 0; j < rdlen; j+=2) {
+                    printf("%02x%02x", p_ans[j], p_ans[j+1]);
+                    if (j + 2 < rdlen) printf(":");
+                }
+                printf("\n");
+
+            } else if (type == TXT) {
+                printf("\tTXT: '%.*s'\n", rdlen-1, p_ans+1);
+            }  else if (type == CNAME) {
+                /* CNAME Record */
+                printf("CNAME: ");
+                unsigned char *name;
+                p_ans = get_name(res, p_ans, &name);
+                printf("%s\n", name);
+            }
+
+            p_ans += rdlen;
+
+            printf("\n");
+        }
+        p = p_ans;    
     }
 }
 
@@ -165,13 +268,14 @@ int main(int argc, char *args[]) {
         dns_res,
         &truncated);
 
-    struct Answer *answer;
-
     if (recv >= 12 && !truncated) {
         // print result
-        resolve_dns_response(dns_res, recv, answer);
-        print_dns_name(&answer);
+        resolve_dns_response(dns_res, recv);
         return 0;
+    }
+
+    if (truncated) {
+        printf("packet truncated!\n");
     }
 
     // fallback tcp
