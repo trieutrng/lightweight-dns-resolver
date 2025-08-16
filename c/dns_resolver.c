@@ -66,11 +66,6 @@ int open_udp_connection(char *host, char *port, struct addrinfo **addrinfo) {
         exit(1);
     }
 
-    // if (connect(sockfd, addrinfo->ai_addr, addrinfo->ai_addrlen) == -1) {
-    //     printf("DNS host can't be resolved: %s", strerror(errno));
-    //     exit(1);
-    // }
-
     return sockfd;
 }
 
@@ -277,8 +272,6 @@ int main(int argc, char *args[]) {
     if (truncated) {
         printf("packet truncated!\n");
     }
-
-    // fallback tcp
 
     printf("falling back to TCP query\n");
 
