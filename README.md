@@ -1,1 +1,1 @@
-# lightweight-dns-resolver
+# dns-protocol
